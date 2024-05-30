@@ -1,0 +1,328 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Keypad.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const byte numRows = 4; //Numarul de randuri pentru tastatura
+const byte numCols = 4; //Numarul de coloane pentru tastatura
+
+char keyMap[numRows][numCols] = //Setarea tastelor
+{
+  {'1', '2', '3', '+'},
+  {'4', '5', '6', '-'},
+  {'7', '8', '9', '*'},
+  {'C', '0', '=', '/'},
+
+};
+
+byte rowPins[numRows] = {9, 8, 7, 6}; // Setarea pinilor pentru randuri
+byte colPins[numCols] = {5, 4, 3, 2}; // Setarea pinilor pentru coloane
+
+long firstOperand = 0; //Declararea globala a operanzilor, si variabilelor ajutatoare
+long secondOperand = 0;
+long thirdOperand = 0;
+float total = 0;
+char *opType;
+char *secondOperator;
+
+Keypad myKeypad = Keypad(makeKeymap(keyMap), rowPins, colPins, numRows, numCols); //setarea tastaturii
+char keypressed; //variabila care retine caracterul apasat
+
+long initialization(long number){ //functie de initializare
+  return number == 0;
+}
+
+long createFirstOperand(long firstOperand){ //functie care creeaza primul operand
+    firstOperand = firstOperand * 10 + (keypressed - '0');
+    return firstOperand; 
+}
+
+void printFirstOperand(long firstOperand){ // functie care afisaza primul operand
+    lcd.setCursor(0, 0);
+    lcd.print(firstOperand);
+}
+
+void printSecondOperand(long secondOperand){ //functie care creeaza al doilea operand
+    lcd.setCursor(0, 1);
+    lcd.print(secondOperand);
+}
+
+void printOperator(){ //functe care afisaza semnul operatiei 
+  lcd.setCursor(15, 0);
+  lcd.print(keypressed);
+}
+
+void printDivException(){ //functie care afisaza un mesaj de eroare la o impartire cu 0
+      total = 0;
+      lcd.clear();
+      lcd.print("Eroare!");
+      delay(5000);
+      lcd.clear();
+}
+
+void clearLCD(){ //functie de eliberare a ecranului
+   total = initialization(total);
+   lcd.clear();
+}
+
+long createSecondOperand(long secondOperand){ //functie de creare celui de-al doilea operand 
+
+  while(1){
+       keypressed = myKeypad.getKey(); //variabila keypressed poate retine caracterele apasate
+
+       if(keypressed >= '0' && keypressed <= '9'){
+        secondOperand = secondOperand * 10 + (keypressed - '0');
+        printSecondOperand(secondOperand);
+       }
+
+       if(keypressed == '+'){ //cazul in care se efectueaza o operatie imediat dupa al doilea operand
+         
+            printOperator();
+
+            if(opType == "sub"){ //daca prima operatie a fost - atunci se retine a doua operatie intr-o variabila auxiliara. De exemplu 2-2+2 trebuie sa dea 2, nu -2
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperator = '+';
+            }
+            
+            else if(opType == "mul"){ //daca prima operatie a fost * atunci se retine a doua operatie intr-o variabila auxiliara. De exemplu 2 * 2 + 1 trebuie sa dea 5, nu 6
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperator = '+';
+            }
+
+            else if(opType == "div"){ //daca prima operatie a fost / atunci se retine a doua operatie intr-o variabila auxiliara
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperator = '+';
+            }
+
+            else{
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperand = secondOperand + thirdOperand;
+            }
+        }
+
+       if(keypressed == '-'){
+         
+            printOperator();
+
+            if(opType == "sub"){
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperator = '-';
+            }
+
+            else if(opType == "mul"){
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperator = '-';
+            }
+
+            else if(opType == "div"){
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperator = '-';
+            }
+
+            else{
+              thirdOperand = createThirdOperand(thirdOperand);
+              secondOperand = secondOperand - thirdOperand;
+            }
+        }
+
+       if(keypressed == '*'){
+         
+         printOperator(); 
+
+         if(opType == 'div'){
+            thirdOperand = createThirdOperand(thirdOperand); 
+            secondOperator = '*';
+         }
+
+         else{
+           thirdOperand = createThirdOperand(thirdOperand);
+           secondOperand = secondOperand * thirdOperand; //De exemplu daca avem 2 + 2 * 2 trebuie sa se efectueze mai intai 2 * 2
+         }
+       }
+
+       if(keypressed == '/'){
+         printOperator();
+         thirdOperand = createThirdOperand(thirdOperand); //De exemplu daca avem, 2 + 2 / 2 trebuie sa se efecutese mai intai 2 / 2
+         secondOperand = secondOperand / thirdOperand;
+       }
+
+      if(keypressed == '='){
+         break;
+      }
+   }
+
+   return secondOperand;
+}
+
+long createThirdOperand(long thirdOperand){ //functie care creeaza al treila operator 
+  while(1){ //ciclu infinit in care se permite citirea de la tastatura
+       keypressed = myKeypad.getKey();
+
+       if(keypressed >= '0' && keypressed <= '9'){
+        thirdOperand = thirdOperand * 10 + (keypressed - '0');
+        clearLCD();
+        printFirstOperand(thirdOperand);
+       }
+
+      if(keypressed == '='){
+       break;
+      }
+   }
+
+   return thirdOperand;
+}
+
+void addOperation(long firstOperand, long secondOperand){ //functie care aduna a 2 operanzi, face aduanrea a trei operanzi sau face o adunare intre primii 2 termeni si 
+                                                          //apoi orice alta operatie cu al terilea operand
+    opType = "add";
+    printOperator();
+
+    secondOperand = createSecondOperand(secondOperand);
+
+    total = firstOperand + secondOperand;
+    lcd.setCursor(0, 3);
+    firstOperand = initialization(firstOperand);
+    secondOperand = initialization(secondOperand);
+    thirdOperand = initialization(thirdOperand);
+    lcd.clear();
+    lcd.print(total, 0);
+    total = initialization(total);
+}
+
+void subOperation(long firstOperand, long secondOperand){//functie care scade 2 operanzi, face scaderea a trei operanzi sau face o scadere intre primii 2 termeni si 
+                                                          //apoi orice alta operatie cu al terilea operand
+    opType = "sub";
+    printOperator();
+    secondOperand = createSecondOperand(secondOperand);
+    
+    if(secondOperator == '+' && thirdOperand != 0){
+      total = firstOperand - secondOperand + thirdOperand ;
+      secondOperator = ' ';
+    }
+
+    else if(secondOperator == '-' && thirdOperand != 0){
+      total = firstOperand - secondOperand - thirdOperand ;
+      secondOperator = ' ';
+    }
+    
+    else{
+      total = firstOperand - secondOperand;
+      secondOperator = ' ';
+    }
+
+    lcd.setCursor(0, 3);
+    lcd.clear();
+    lcd.print(total, 0);
+}
+
+void mulOperation(long firstOperand, long secondOperand){ //functie care inmulteste 2 operanzi, face inmultirea a trei operanzi sau face o inmultire intre primii 2 termeni si 
+                                                          //apoi orice alta operatie cu al terilea operand
+    opType = "mul";
+    printOperator();
+
+    secondOperand = createSecondOperand(secondOperand);
+    
+    if(secondOperator == '+' && thirdOperand != 0){
+      total = firstOperand * secondOperand + thirdOperand ;
+      secondOperator = ' ';
+    }
+
+    else if(secondOperator == '-' && thirdOperand != 0){
+      total = firstOperand * secondOperand - thirdOperand ;
+      secondOperator = ' ';
+    }
+    
+    else{
+       total = firstOperand * secondOperand;
+    }
+    lcd.setCursor(0, 3);
+    firstOperand = 0;
+    secondOperand = 0;
+    thirdOperand = 0;
+    lcd.clear();
+    lcd.print(total, 0);
+}
+
+void divOperation(long firstOperand, long secondOperand){ //functie care imparte 2 operanzi sau face o impartire intre primii 2 termeni si 
+                                                          //apoi orice alta operatie cu al terilea operand
+
+    opType = "div";
+    printOperator();
+    secondOperand = createSecondOperand(secondOperand);
+ 
+    if(secondOperand == 0){
+       printDivException(); //afisarea mesajului de eroare cand impartirea este la 0
+       firstOperand = initialization(firstOperand);
+     }
+
+    else{
+
+      if(secondOperator == '+' && thirdOperand != 0){
+        total = ((double)firstOperand / (double)secondOperand) + thirdOperand ;
+        secondOperator = ' ';
+      }
+
+      else if(secondOperator == '-' && thirdOperand != 0){
+        total = (double)firstOperand / (double)secondOperand - thirdOperand ;
+        secondOperator = ' ';
+      }
+
+      else{
+        total = (double)firstOperand / (double)secondOperand;
+      }
+
+      lcd.setCursor(0, 3);
+      firstOperand = initialization(firstOperand);
+      secondOperand = initialization(secondOperand);
+      thirdOperand = initialization(thirdOperand);
+      lcd.clear();
+
+      if((float)total / (long)total == 0){
+        lcd.print(total, 3);
+      }
+
+      if((float)total / (long)total != 0.0){
+        lcd.print(total, 2);
+      }
+   }
+}
+
+void setup() { //functia setup
+  lcd.init();
+  Serial.begin(9600);
+}
+
+void loop() { //functia loop
+  lcd.backlight();
+  keypressed = myKeypad.getKey();
+
+  if(keypressed >= '0' && keypressed <= '9'){ //daca variabila keypressed este o cifra atunci se formeaza primul operand
+    firstOperand = createFirstOperand(firstOperand);
+    printFirstOperand(firstOperand);
+  }
+
+  if(keypressed == '+'){ //daca primul operator este + atunci se apeleaza functia de adunare
+      addOperation(firstOperand, secondOperand);
+      firstOperand = initialization(firstOperand); //primul operand devine 0
+  }
+
+  if(keypressed == '-'){
+     subOperation(firstOperand, secondOperand);
+     firstOperand = initialization(firstOperand);
+  }
+
+  if(keypressed == '*'){
+      mulOperation(firstOperand, secondOperand);
+      firstOperand = initialization(firstOperand);
+  }
+
+  if(keypressed == '/'){
+      divOperation(firstOperand, secondOperand);
+      firstOperand = initialization(firstOperand);
+  }
+
+  if(keypressed == 'C'){ //daca variabila keypressed este C (clear) atunci de elibereaza ecranul pentru alte operatii
+   clearLCD();
+  }
+}
